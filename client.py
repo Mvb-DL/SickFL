@@ -108,11 +108,12 @@ class Client:
 
             print(f"Verbindung zum Gateway-Server {self.gateway_host}:{self.gateway_port} hergestellt")
 
-            self.client_socket.send(b"CLIENT_READY_FOR_RSA")
+            self.client_socket.send(b"GATEWAY_READY_FOR_RSA")
 
             gateway_ready = self.client_socket.recv(1024)
 
             if gateway_ready == b"GATEWAY_READY_FOR_RSA":
+
 
                 self.show_frame(RegistrationPage)
 
@@ -124,6 +125,7 @@ class Client:
         print(f"Reconnection zum Gateway-Server {self.gateway_host}:{self.gateway_port} hergestellt")
 
         return True
+
 
     def build_gui(self, master):
 
@@ -380,15 +382,14 @@ class Client:
                                     if str(verify_end_model_hash.hexdigest()) == str(self.enc_model_hash):
 
                                         print("Hash of Enc Models are the same...")
+
                                         self.enc_global_model = enc_model_gateway
 
                                         #connect with server and receiving serverModelEncodeKey
                                         host, port = self.selected_server_connection_url.split(':')
 
                                         #change GUI while connecting to aggregate server...
-                                        print("HIer?")
                                         self.change_gui()
-                                        print("Nein")
                                         self.close_connection()
                                         self.build_aggregate_server_connection(host, int(port))
         else:
@@ -421,11 +422,16 @@ class Client:
 
         self.client_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client_server_socket.connect((host, port))
+
         print(f"Verbindung zum Server {self.host}:{self.port} hergestellt")
 
         self.client_server_socket.send(b"CLIENT_READY_FOR_RSA")
 
+        print(1)
+
         server_ready = self.client_server_socket.recv(1024)
+
+        print(2)
 
         if server_ready == b"SERVER_READY_FOR_RSA":
 

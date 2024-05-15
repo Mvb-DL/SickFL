@@ -201,9 +201,10 @@ class Server:
         #waiting if client has client id
         reconnection_id = client_socket.recv(2048)
 
-        if reconnection_id != b"CLIENT_READY_FOR_RSA":
+        if reconnection_id != b"GATEWAY_READY_FOR_RSA":
 
             print("wait for reconnection id...")
+            
             reconnection_id = reconnection_id.decode("utf-8")
 
             if reconnection_id in self.open_connections:
