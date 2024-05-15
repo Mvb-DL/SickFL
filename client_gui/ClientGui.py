@@ -1,5 +1,4 @@
 import tkinter as tk
-from tkinter import * 
 import customtkinter
 
 
@@ -24,6 +23,8 @@ class RegistrationPage(tk.Frame):
     def __init__(self, parent, controller):
 
         tk.Frame.__init__(self, parent)
+
+        self.config(bg="black")
 
         label = tk.Label(self, text="Registration")
         label.pack(pady=10,padx=10)
@@ -55,7 +56,7 @@ class RegistrationPage(tk.Frame):
 class ModelSelectPage(tk.Frame):
 
     def __init__(self, parent, controller):
-        
+
         tk.Frame.__init__(self, parent)
 
         label = tk.Label(self, text="Model Selection")
@@ -70,4 +71,55 @@ class ModelSelectPage(tk.Frame):
                                 command=controller.select_ml_model, fg_color="#6225E6")
 
         
+        button2.pack()
+
+
+class ModelSelectPage(tk.Frame):
+
+    def __init__(self, parent, controller):
+        
+        tk.Frame.__init__(self, parent)
+
+        label = tk.Label(self, text="Model Selection")
+        label.pack(pady=10,padx=10)
+
+        button1 = customtkinter.CTkButton(self, text="Back",
+                                command=lambda: controller.show_frame(RegistrationPage), fg_color="#6225E6")
+        button1.pack()
+
+        button2 = customtkinter.CTkButton(self, text="Start",
+                                command=controller.select_ml_model, fg_color="#6225E6")
+        button2.pack()
+
+
+
+class ValidationPage(tk.Frame):
+
+    def __init__(self, parent, controller):
+        
+        tk.Frame.__init__(self, parent)
+
+        label = tk.Label(self, text="Client Validation")
+        label.pack(pady=10,padx=10)
+
+        progressbar = customtkinter.CTkProgressBar(self, orientation="horizontal")
+        progressbar.pack()
+
+
+
+class TrainingPage(tk.Frame):
+
+    def __init__(self, parent, controller):
+        
+        tk.Frame.__init__(self, parent)
+
+        label = tk.Label(self, text="Starting Training")
+        label.pack(pady=10,padx=10)
+
+        button1 = customtkinter.CTkButton(self, text="Back",
+                                command=lambda: controller.show_frame(RegistrationPage), fg_color="#6225E6")
+        button1.pack()
+
+        button2 = customtkinter.CTkButton(self, text="Start",
+                                command=controller.select_ml_model, fg_color="#6225E6")
         button2.pack()

@@ -16,7 +16,7 @@ from SmartContract.client_smart_contract import ClientSmartContract
 from utils import decode_dict
 import numpy as np
 
-from client_gui.ClientGui import RegistrationPage, GatewaySelectPage, ModelSelectPage
+from client_gui.ClientGui import RegistrationPage, GatewaySelectPage, ModelSelectPage, ValidationPage, TrainingPage
 
 
 class Client:
@@ -129,30 +129,26 @@ class Client:
 
     def build_gui(self, master):
 
-        customtkinter.set_appearance_mode("dark")
-        customtkinter.set_default_color_theme("dark-blue")
+        container = tk.Frame(master)
+        container.config(bg="black", width=1200, height=800)
+        container.pack(expand = True)
 
-        container = tk.Frame(master, width=750, height=500)
-        container.pack(side="top", fill="both", expand = True)
-
-        for F in (RegistrationPage, GatewaySelectPage, ModelSelectPage):
+        for F in (RegistrationPage, GatewaySelectPage, ModelSelectPage, ValidationPage, TrainingPage):
 
             frame = F(container, self)
-
             self.frames[F] = frame
-
             frame.grid(row=0, column=0, sticky="nsew")
 
         return True
 
 
     def show_frame(self, cont):
-
         frame = self.frames[cont]
         frame.tkraise()
 
-
-    def change_gui(self):
+    def server_gui(self):
+        print("Server GUI")
+        self.show_frame(TrainingPage)
         root.destroy()
 
     def select_gateway(self):
@@ -171,6 +167,7 @@ class Client:
         self.client_socket.send(message)   
 
         print("Start")
+        self.show_frame(ValidationPage)
         self.get_gateway_respond() 
 
 
@@ -247,6 +244,7 @@ class Client:
         if tmpHash == GatewayPublicKeyHash:
 
             self.client_socket.send("GATEWAY_KEYS_VERIFIED_BY_CLIENT".encode('utf-8'))
+
             print("Gatewaykeys verified by Client")
             
             received_aes_data = self.client_socket.recv(2048)
@@ -332,11 +330,11 @@ class Client:
                             else:
 
                                 try:
-
                                     server_account_addresses = server_account_addresses.decode("utf-8")
                                     server_account_addresses = json.loads(server_account_addresses)
 
                                     #checks if server are available
+
                                 except:
                                     print("No Server available to connect!")
                                     self.close_connection()
@@ -389,7 +387,7 @@ class Client:
                                         host, port = self.selected_server_connection_url.split(':')
 
                                         #change GUI while connecting to aggregate server...
-                                        self.change_gui()
+                                        self.server_gui()
                                         self.close_connection()
                                         self.build_aggregate_server_connection(host, int(port))
         else:
@@ -427,11 +425,7 @@ class Client:
 
         self.client_server_socket.send(b"CLIENT_READY_FOR_RSA")
 
-        print(1)
-
         server_ready = self.client_server_socket.recv(1024)
-
-        print(2)
 
         if server_ready == b"SERVER_READY_FOR_RSA":
 
@@ -720,7 +714,7 @@ class Client:
             
             except ConnectionRefusedError:
                 print("Connection refused, retrying...")
-                time.sleep(3)  
+                time.sleep(5)  
 
             except Exception as e:
                 print(f"Error: {e}")
@@ -812,6 +806,7 @@ class Client:
 
 
     def close_connection(self):
+
         self.client_socket.close()
         print("Client Connection closed")
 
@@ -819,6 +814,9 @@ class Client:
 if __name__ == "__main__":
 
     root = customtkinter.CTk()
+    root._set_appearance_mode("dark")
+    root.title("SICKFL")
+    root.config(height=800, width=1200)
     server = Client(root)
     root.mainloop()
     
