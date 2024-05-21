@@ -114,7 +114,6 @@ class Client:
 
             if gateway_ready == b"GATEWAY_READY_FOR_RSA":
 
-
                 self.show_frame(RegistrationPage)
 
 
@@ -653,9 +652,10 @@ class Client:
         print("")
         print("***********************************************************")
 
+        print("Client Model Weights saved and tries to reconnect to gateway...")
 
         #reconnect with gateway server to send model weights
-        if self.build_gateway_reconnection():
+        if self.test_connect():
 
             self.gateway_reconnection(final_model_weights)
 
@@ -671,10 +671,13 @@ class Client:
         #check if when msg just sent back it´s possible to solve the test
         gateway_connection_test = self.client_socket.recv(4096)
         gateway_connection_test = self.aes_client_decoding(gateway_connection_test)
+
         gateway_connection_test_hash = self.hash_model(gateway_connection_test)
 
         gateway_connection_test_hash = gateway_connection_test_hash.hexdigest()
         gateway_connection_test_hash = gateway_connection_test_hash.encode("utf-8")
+
+        print("gateway_connection_test_hash", gateway_connection_test_hash)
 
         gateway_connection_test_hash = self.aes_client_encoding(gateway_connection_test_hash)
         self.client_socket.send(gateway_connection_test_hash)
@@ -689,17 +692,20 @@ class Client:
         print()
 
         if self.has_send_model_weights == False:
+
             print("Sending model weights")
             self.send_model_weights(final_model_weights)
 
         elif self.has_send_model_weights == True:
-             print("Receiving Model weights update")
-             self.get_updated_model_weights()
+             
+            print("Receiving Model weights update")
+            self.get_updated_model_weights()
 
 
     def test_connect(self):
         
         self.close_connection()
+
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         gateway_address = (self.gateway_host, self.gateway_port)
 
@@ -710,7 +716,7 @@ class Client:
             try:
                 self.client_socket.connect(gateway_address)
                 connected = True
-                print(f"Reconnection zum Gateway-Server {self.gateway_host}:{self.gateway_port} hergestellt")
+                print(f"Reconnection to Gateway-Server {self.gateway_host}:{self.gateway_port}")
                 return True
             
             except ConnectionRefusedError:
@@ -751,6 +757,7 @@ class Client:
 
                 #reconnect with gateway server to send model weights
                 if self.test_connect():
+
                     self.gateway_reconnection(final_model_weights)
 
 
@@ -807,7 +814,6 @@ class Client:
 
 
     def close_connection(self):
-
         self.client_socket.close()
         print("Client Connection closed")
 

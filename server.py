@@ -58,6 +58,7 @@ class Server:
         self.connected_clients = set()
         self.pending_nodes = list()
         self.average_weights = {}
+
         self.required_nodes = 1
         self.max_rounds = 2
         
@@ -550,6 +551,7 @@ class Server:
 
             print()
             print("Max Rounds of Training: ", self.max_rounds, "Round Number: ", int(self.training_round))
+            print()
 
 #grund training abzubrechen
             if int(self.max_rounds) <= int(self.training_round):
@@ -693,8 +695,6 @@ class Server:
     def get_client_request(self):
 
         try:
-
-            #while len(self.connected_nodes) < self.required_nodes:
 
                 client_socket, client_address = self.server_socket_client.accept()
                 
@@ -906,10 +906,21 @@ class Server:
                                                                                server_test_accuracy,
                                                                                client_model_test_validation):
                                         
-                                        client_accessed = self.aes_client_encoding(b"CLIENT_ACCESSED")
-                                        client_socket.send(client_accessed)
 
-                                        self.run_server()
+                                        #wait before sending depending on how many clients are connected
+                                        if len(self.connected_nodes) >= self.required_nodes:
+
+                                            for client in self.connected_clients:
+                                                print(client)
+
+                                                client_accessed = self.aes_client_encoding(b"CLIENT_ACCESSED")
+                                                client.send(client_accessed)
+
+                                            self.run_server()
+
+                                        else:
+
+                                            self.run_server()
 
                                     else:
                                         client_socket.close()        
