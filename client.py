@@ -167,6 +167,7 @@ class Client:
         self.client_socket.send(message)   
 
         print("Start")
+        
         self.show_frame(ValidationPage)
         self.get_gateway_respond() 
 
@@ -814,7 +815,7 @@ class Client:
 if __name__ == "__main__":
 
     root = customtkinter.CTk()
-    root._set_appearance_mode("dark")
+    root.config(bg="black")
     root.title("SICKFL")
     root.config(height=800, width=1200)
     server = Client(root)
