@@ -758,6 +758,8 @@ class Client:
                 #reconnect with gateway server to send model weights
                 if self.test_connect():
 
+                    print("Try to reconnect")
+
                     self.gateway_reconnection(final_model_weights)
 
 

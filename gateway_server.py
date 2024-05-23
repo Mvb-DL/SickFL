@@ -206,7 +206,7 @@ class Server:
 
                 self.test_client_connection(client_socket, reconnection_id)
                         
-        else:
+        elif gateway_input == b"GATEWAY_READY_FOR_RSA":
 
             client_socket.send(b"GATEWAY_READY_FOR_RSA")
 
@@ -751,18 +751,16 @@ class Server:
             self.received_connection_weights += 1
 
             print("Received Connection Weights: ", self.received_connection_weights)
-            print("Required Connection Weights:", self.required_client_weights)
+            print("Required Connection Weights:", 2)
 
-            ##only when all client have send there wheights aggregate the weights before
-            if self.received_connection_weights >= self.received_connection_weights:
+            client_socket.close()
 
-                self.connect_aggregate_server(dec_client_model_weights)
+            print()
+            print("Connecting to aggregate server, sending client model weights...")
+            print()
 
-            elif self.received_connection_weights <= self.received_connection_weights:
+            self.connect_aggregate_server(dec_client_model_weights)
 
-                print("Waiting for more client weights...")
-                self.server_busy = False
-                self.get_participant_request()
 
         else:
             print("Modelweights of Client were changed. Stop transmitting.")
