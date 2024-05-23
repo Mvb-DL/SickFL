@@ -108,13 +108,17 @@ class Client:
 
             print(f"Verbindung zum Gateway-Server {self.gateway_host}:{self.gateway_port} hergestellt")
 
-            self.client_socket.send(b"GATEWAY_READY_FOR_RSA")
+            gateway_open_thread = self.client_socket.recv(1024)
 
-            gateway_ready = self.client_socket.recv(1024)
+            if gateway_open_thread == b"OPEN_THREAD":
 
-            if gateway_ready == b"GATEWAY_READY_FOR_RSA":
+                self.client_socket.send(b"GATEWAY_READY_FOR_RSA")
 
-                self.show_frame(RegistrationPage)
+                gateway_ready = self.client_socket.recv(1024)
+
+                if gateway_ready == b"GATEWAY_READY_FOR_RSA":
+
+                    self.show_frame(RegistrationPage)
 
 
     def build_gateway_reconnection(self):
@@ -655,9 +659,7 @@ class Client:
         print("Client Model Weights saved and tries to reconnect to gateway...")
 
         #reconnect with gateway server to send model weights
-        if self.test_connect():
-
-            self.gateway_reconnection(final_model_weights)
+        self.test_connect(final_model_weights)
 
 
     def gateway_reconnection(self, final_model_weights):
@@ -672,52 +674,83 @@ class Client:
         gateway_connection_test = self.client_socket.recv(4096)
         gateway_connection_test = self.aes_client_decoding(gateway_connection_test)
 
-        gateway_connection_test_hash = self.hash_model(gateway_connection_test)
+        if gateway_connection_test == b"CLIENT_WAIT":
 
-        gateway_connection_test_hash = gateway_connection_test_hash.hexdigest()
-        gateway_connection_test_hash = gateway_connection_test_hash.encode("utf-8")
+            print()
+            print("Client has to wait until aggregate server has finished")
+            print()
 
-        print("gateway_connection_test_hash", gateway_connection_test_hash)
+            self.test_connect(final_model_weights)
 
-        gateway_connection_test_hash = self.aes_client_encoding(gateway_connection_test_hash)
-        self.client_socket.send(gateway_connection_test_hash)
+        else:
 
-        #get response from gateway with new reconnection id
-        new_reconnection_id = self.client_socket.recv(1024)
-        new_reconnection_id  = self.aes_client_decoding(new_reconnection_id)
-        self.client_reconnection_id = new_reconnection_id.decode("utf-8") 
+            gateway_connection_test_hash = self.hash_model(gateway_connection_test)
 
-        print()
-        print("New Client Reconnection ID", self.client_reconnection_id)
-        print()
+            gateway_connection_test_hash = gateway_connection_test_hash.hexdigest()
+            gateway_connection_test_hash = gateway_connection_test_hash.encode("utf-8")
 
-        if self.has_send_model_weights == False:
+            print("gateway_connection_test_hash", gateway_connection_test_hash)
 
-            print("Sending model weights")
-            self.send_model_weights(final_model_weights)
+            gateway_connection_test_hash = self.aes_client_encoding(gateway_connection_test_hash)
+            self.client_socket.send(gateway_connection_test_hash)
 
-        elif self.has_send_model_weights == True:
-             
-            print("Receiving Model weights update")
-            self.get_updated_model_weights()
+            #get response from gateway with new reconnection id
+            new_reconnection_id = self.client_socket.recv(1024)
+            new_reconnection_id  = self.aes_client_decoding(new_reconnection_id)
+            self.client_reconnection_id = new_reconnection_id.decode("utf-8") 
+
+            print()
+            print("New Client Reconnection ID", self.client_reconnection_id)
+            print()
+
+            if self.has_send_model_weights == False:
+
+                print()
+                print("Sending model weights")
+                print()
+
+                self.send_model_weights(final_model_weights)
+
+            elif self.has_send_model_weights == True:
+            
+                print()
+                print("Receiving Model weights update")
+                print()
+
+                self.get_updated_model_weights()
 
 
-    def test_connect(self):
+    def test_connect(self, final_model_weights):
         
         self.close_connection()
-
-        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        gateway_address = (self.gateway_host, self.gateway_port)
-
         connected = False
 
         while not connected:
 
             try:
-                self.client_socket.connect(gateway_address)
-                connected = True
-                print(f"Reconnection to Gateway-Server {self.gateway_host}:{self.gateway_port}")
-                return True
+
+                    self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+                    gateway_address = (self.gateway_host, self.gateway_port)
+
+                    self.client_socket.connect(gateway_address)
+                    connected = True
+
+                    print(f"Reconnection to Gateway-Server {self.gateway_host}:{self.gateway_port}")
+
+                    try:
+                        gateway_open_thread = self.client_socket.recv(1024)
+
+                        if gateway_open_thread == b"OPEN_THREAD":
+
+                            print("Thread is open")
+                            print(self.client_socket)
+                            self.gateway_reconnection(final_model_weights)
+
+                    except:
+                        print("Connection failed")
+                        self.test_connect(final_model_weights)
+   
             
             except ConnectionRefusedError:
                 print("Connection refused, retrying...")
@@ -756,12 +789,8 @@ class Client:
                 self.has_send_model_weights = True
 
                 #reconnect with gateway server to send model weights
-                if self.test_connect():
-
-                    print("Try to reconnect")
-
-                    self.gateway_reconnection(final_model_weights)
-
+                self.test_connect(final_model_weights)
+                
 
     #waiting for feedback of gateway if closing or start training again...
     def get_updated_model_weights(self):

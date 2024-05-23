@@ -77,7 +77,7 @@ class Server:
         self.server_busy = False 
         self.required_client_weights = len(self.connected_client_nodes)
         self.received_connection_weights = 0
-
+        self.client_already_registered = []
 
         #deploy init smart contract
         gateway_contract, self.gateway_contract_dict = SmartContract(role="Gateway", participant_public_key=self.public
@@ -161,14 +161,15 @@ class Server:
             client_test_byte_response = client_socket.recv(2048)
             client_test_byte_response = self.aes_client_decoding(client_test_byte_response)
 
-            print("compare", random_bytes_hash, client_test_byte_response.decode("utf-8") )
-
             if str(random_bytes_hash) == str(client_test_byte_response.decode("utf-8")):
 
                 print("Client was successfully reconnected...")
 
                 #updated reonnection id in list
                 new_reconnection_id = self.update_connection(reconnection_id)
+
+                #put ids in list which have been already set
+                self.client_already_registered.append(new_reconnection_id)
 
                 client_reconnected = self.aes_client_encoding(new_reconnection_id.encode("utf-8"))
                 client_socket.send(client_reconnected)
@@ -179,12 +180,19 @@ class Server:
                 #check if client is reconnecting to send his model weights or to get updated model weights
                 if client_action_request == b"CLIENT_WAITING_FOR_MODEL_WEIGHTS_UPDATE":
 
+                    print()
+                    print("Sending updated Model weights to client")
+                    print()
+
                     self.send_updated_model_weights_to_client(client_socket)
 
                 elif client_action_request == b"CLIENT_WILL_SEND_MODEL_WEIGHTS":
 
                     #calling function to get client model weights
+                    print()
                     print("Receiving Client Model Weights")
+                    print()
+
                     self.get_client_model_weights(client_socket)
 
             else:
@@ -194,7 +202,13 @@ class Server:
 
     def handle_client(self, client_socket, client_address):
 
+        client_socket.send(b"OPEN_THREAD")
+
+        print("Started Thread")
+
         gateway_input = client_socket.recv(2048)
+
+        print(gateway_input)
 
         if gateway_input != b"GATEWAY_READY_FOR_RSA":
 
@@ -202,9 +216,19 @@ class Server:
 
             if reconnection_id in self.open_connections:
 
-                print("RECON ID: ", reconnection_id)
+                if reconnection_id not in self.client_already_registered:
 
-                self.test_client_connection(client_socket, reconnection_id)
+                    print("RECON ID: ", reconnection_id)
+
+                    self.test_client_connection(client_socket, reconnection_id)
+
+                elif reconnection_id in self.client_already_registered:
+                    
+                    client_already_registered = self.aes_client_encoding(b"CLIENT_WAIT")
+                    client_socket.send(client_already_registered)
+
+                    print(reconnection_id, "Client already registered")
+                    client_socket.close()
                         
         elif gateway_input == b"GATEWAY_READY_FOR_RSA":
 
@@ -216,11 +240,11 @@ class Server:
                 
                 self.send_gateway_keys(client_socket, client_address, client_public_key)
               
-
             else:
                 print("Client not able to connect")
                 self.server_busy = False
-                self.get_participant_request()
+                self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.run_server()
 
 
     #get request from client
@@ -257,10 +281,10 @@ class Server:
             client_thread = threading.Thread(target=self.handle_client, args=(client_socket, client_address))
             client_thread.start()
             
-
         elif self.server_busy:
 
             print("Server is busy")
+
             self.get_participant_request()
 
 
@@ -751,15 +775,27 @@ class Server:
             self.received_connection_weights += 1
 
             print("Received Connection Weights: ", self.received_connection_weights)
-            print("Required Connection Weights:", 2)
+            print("Required Connection Weights: ", 2)
 
             client_socket.close()
 
-            print()
-            print("Connecting to aggregate server, sending client model weights...")
-            print()
+            if self.received_connection_weights >= 2:
 
-            self.connect_aggregate_server(dec_client_model_weights)
+                print()
+                print("Connecting to aggregate server, sending client model weights...")
+                print()
+
+                #connect to aggregate server if enough model weights were collected!
+                self.connect_aggregate_server(dec_client_model_weights)
+
+            else:
+
+                print()
+                print("Waiting for more client model weights")
+                print()
+                self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.run_server()
+
 
 
         else:
@@ -831,6 +867,9 @@ class Server:
                 print("Init next training round")
                 print()
 
+                self.client_already_registered = []
+
+                self.server_socket.close()
                 self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.run_server()
 
@@ -871,10 +910,10 @@ class Server:
         self.server_global_model_weights = None
 
         #reset the socket to reopen the gateway again for every connection
-        #self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_busy = False
-        #self.run_server()
-        self.get_participant_request()
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.run_server()
+
 
 
     #close server and client connection

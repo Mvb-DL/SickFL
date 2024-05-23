@@ -119,13 +119,17 @@ class Server:
 
         print(f"Verbindung zum Gateway-Server {self.gateway_host}:{self.gateway_port} hergestellt")
 
-        self.server_socket.send(b"GATEWAY_READY_FOR_RSA")
+        gateway_open_thread = self.server_socket.recv(1024)
 
-        gateway_ready = self.server_socket.recv(1024)
+        if gateway_open_thread == b"OPEN_THREAD":
 
-        if gateway_ready == b"GATEWAY_READY_FOR_RSA":
+            self.server_socket.send(b"GATEWAY_READY_FOR_RSA")
 
-            self.send_rsa_keys()
+            gateway_ready = self.server_socket.recv(1024)
+
+            if gateway_ready == b"GATEWAY_READY_FOR_RSA":
+
+                self.send_rsa_keys()
 
     
     def send_rsa_keys(self):
