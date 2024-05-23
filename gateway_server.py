@@ -192,6 +192,37 @@ class Server:
                 print("Client cannot be verified")
                 
 
+    def handle_client(self, client_socket, client_address):
+
+        gateway_input = client_socket.recv(2048)
+
+        if gateway_input != b"GATEWAY_READY_FOR_RSA":
+
+            reconnection_id = gateway_input.decode("utf-8")
+
+            if reconnection_id in self.open_connections:
+
+                print("RECON ID: ", reconnection_id)
+
+                self.test_client_connection(client_socket, reconnection_id)
+                        
+        else:
+
+            client_socket.send(b"GATEWAY_READY_FOR_RSA")
+
+            tmpHash, clientPublicHash, client_public_key = self.verify_client_keys(client_socket)
+
+            if tmpHash == clientPublicHash:
+                
+                self.send_gateway_keys(client_socket, client_address, client_public_key)
+              
+
+            else:
+                print("Client not able to connect")
+                self.server_busy = False
+                self.get_participant_request()
+
+
     #get request from client
     def get_participant_request(self):
 
@@ -222,37 +253,9 @@ class Server:
             print(f"Connection with {client_address}")
             print()
 
-            #waiting if client has client id
-            reconnection_id = client_socket.recv(2048)
-
-            if reconnection_id != b"GATEWAY_READY_FOR_RSA":
-
-                    reconnection_id = reconnection_id.decode("utf-8")
-
-                    if reconnection_id in self.open_connections:
-
-                        print("RECON ID: ", reconnection_id)
-
-                        self.test_client_connection(client_socket, reconnection_id)
-                        
-            else:
-
-                    client_socket.send(b"GATEWAY_READY_FOR_RSA")
-
-                    tmpHash, clientPublicHash, client_public_key = self.verify_client_keys(client_socket)
-
-                    if tmpHash == clientPublicHash:
-
-                        # Mehrere Clients handhaben
-                        client_thread = threading.Thread(target=self.send_gateway_keys, args=(client_socket,
-                                                                                          client_address,
-                                                                                          client_public_key))
-                        client_thread.start()
-
-                    else:
-                        print("Client not able to connect")
-                        self.server_busy = False
-                        self.get_participant_request()
+             # Mehrere Clients handhaben
+            client_thread = threading.Thread(target=self.handle_client, args=(client_socket, client_address))
+            client_thread.start()
             
 
         elif self.server_busy:
