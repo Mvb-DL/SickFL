@@ -15,6 +15,7 @@ from cryptography.fernet import Fernet
 from SmartContract.client_smart_contract import ClientSmartContract
 from utils import decode_dict
 import numpy as np
+import secrets
 
 from client_gui.ClientGui import RegistrationPage, GatewaySelectPage, ModelSelectPage, ValidationPage, TrainingPage
 
@@ -24,6 +25,10 @@ class Client:
     def __init__(self, master):
 
         self.master = master
+
+        #client ports for gateway to connect
+        self.client_host = "127.0.0.1"
+        self.client_port = secrets.randbelow(65535 - 49152 + 1) + 49152
 
         #private and public keys
         random = Random.new().read
@@ -47,6 +52,8 @@ class Client:
         #build up server connection
         self.host = '127.0.0.1'
         self.port = 12345         
+
+        
 
         #GUI STUFF
         self.entry = tk.Entry(master)
@@ -121,13 +128,18 @@ class Client:
                     self.show_frame(RegistrationPage)
 
 
-    def build_gateway_reconnection(self):
+    def build_client_server(self):
 
-        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.client_socket.connect((self.gateway_host, self.gateway_port))
-        print(f"Reconnection zum Gateway-Server {self.gateway_host}:{self.gateway_port} hergestellt")
+        self.server_socket_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket_client.bind((self.client_host, self.client_port))
+        self.server_socket_client.listen(1)
+
+        print()
+        print("Client in server position is waiting for client model weights from server")
+        print()
 
         return True
+
 
 
     def build_gui(self, master):
@@ -613,6 +625,7 @@ class Client:
 
                                        
         else:
+
             print("Serverkeys are not verified")
 
     #starts the training of the client    
@@ -674,6 +687,8 @@ class Client:
         gateway_connection_test = self.client_socket.recv(4096)
         gateway_connection_test = self.aes_client_decoding(gateway_connection_test)
 
+        print(gateway_connection_test, self.client_socket)
+
         if gateway_connection_test == b"CLIENT_WAIT":
 
             print()
@@ -703,21 +718,36 @@ class Client:
             print("New Client Reconnection ID", self.client_reconnection_id)
             print()
 
-            if self.has_send_model_weights == False:
+            client_host_port_dict = {
+                "host": self.client_host,
+                "port": self.client_port
+            }
 
-                print()
-                print("Sending model weights")
-                print()
+            enc_client_host_port_dict = pickle.dumps(client_host_port_dict)
 
-                self.send_model_weights(final_model_weights)
+            client_host_port = self.aes_client_encoding(enc_client_host_port_dict)
+            self.client_socket.send(client_host_port)
 
-            elif self.has_send_model_weights == True:
+            received_client_host_port = self.client_socket.recv(1024)
+            received_client_host_port = self.aes_client_decoding(received_client_host_port)
+
+            if received_client_host_port == b"GATEWAY_RECEIVED_CLIENT_HOST_PORT":
+
+                if self.has_send_model_weights == False:
+
+                    print()
+                    print("Sending client model weights")
+                    print()
+
+                    self.send_model_weights(final_model_weights)
+
+            #elif self.has_send_model_weights == True:
             
-                print()
-                print("Receiving Model weights update")
-                print()
+                #print()
+                #print("Receiving Model weights update")
+                #print()
 
-                self.get_updated_model_weights()
+                #self.get_updated_model_weights()
 
 
     def test_connect(self, final_model_weights):
@@ -789,17 +819,40 @@ class Client:
                 self.has_send_model_weights = True
 
                 #reconnect with gateway server to send model weights
-                self.test_connect(final_model_weights)
+                #gateway should reconnect with client!
+                self.client_socket.close()
+
+                #start client server waiting for gateway server
+                self.server_socket_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.server_socket_client.bind((self.client_host, self.client_port))
+                self.server_socket_client.listen(1)
+
+                print()
+                print("Client in server position is waiting for client model weights from server")
+                print()
+
+                gateway_socket, gateway_address = self.server_socket_client.accept()
+                
+                if self.has_send_model_weights:
+
+                    gateway_ready = gateway_socket.recv(1024)
+
+                    if gateway_ready == b"GATEWAY_SEND_UPDATED_MODEL_WEIGHTS":
+
+                        gateway_socket.send(b"CLIENT_WAITING_FOR_MODEL_WEIGHTS_UPDATE")
+            
+                        print()
+                        print("Receiving Model weights update from gateway")
+                        print()
+
+                        self.get_updated_model_weights(gateway_socket)
                 
 
     #waiting for feedback of gateway if closing or start training again...
-    def get_updated_model_weights(self):
+    def get_updated_model_weights(self, gateway_socket):
 
-        client_waiting_model_weights_update = self.aes_client_encoding(b"CLIENT_WAITING_FOR_MODEL_WEIGHTS_UPDATE")
-        self.client_socket.send(client_waiting_model_weights_update)
-
-        updated_server_model_weights = self.client_socket.recv(65536)
-        updated_server_model_weights = self.aes_client_decoding(updated_server_model_weights)
+        updated_server_model_weights = gateway_socket.recv(65536)
+        gateway_socket.close()
 
         self.set_updated_model_weights(updated_server_model_weights)
 
