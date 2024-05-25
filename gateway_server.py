@@ -167,6 +167,9 @@ class Server:
             client_reconnection_set = self.aes_client_decoding(client_reconnection_set)
             client_reconnection_set = pickle.loads(client_reconnection_set)
 
+            #updated reonnection id in list
+            new_reconnection_id = self.update_connection(reconnection_id)
+
             for clients in self.client_reconnection_sets:
 
                 print(clients)
@@ -176,9 +179,6 @@ class Server:
                     print()
                     print("Client was successfully reconnected...")
                     print()
-
-                    #updated reonnection id in list
-                    new_reconnection_id = self.update_connection(reconnection_id)
 
                     #put ids in list which have been already set
                     self.client_already_registered.append(new_reconnection_id)
