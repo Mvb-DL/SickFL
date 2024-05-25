@@ -102,12 +102,13 @@ class Server:
     def run_server(self):
 
         self.server_socket.bind((self.host, self.port))
-        self.server_socket.listen(3)
+        self.server_socket.listen(1)
 
         print(f"Gateway-Server auf {self.host}:{self.port}")
 
         if self.gateway_smart_contract_initiated is False:
-         #after starting up the gateway server it set up a smart contract to the BC
+
+            #after starting up the gateway server it set up a smart contract to the BC
             if self.init_smart_contract():
 
                 self.server_busy = False
@@ -259,6 +260,7 @@ class Server:
                 self.send_gateway_keys(client_socket, client_address, client_public_key)
               
             else:
+
                 print("Client not able to connect")
                 self.server_busy = False
                 self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -275,9 +277,11 @@ class Server:
         print("***********************************************************")
 
         if len(self.open_connections) > 0:
+
             print(f"{len(self.open_connections)} running Connections")
 
         for connection in self.open_connections:
+            
             print("Open Connection ID: ", connection)
 
         print()
@@ -919,6 +923,8 @@ class Server:
                         self.send_updated_model_weights_to_client(self.server_socket)
                         self.server_socket.close()
 
+                self.client_host_port_dict_list = []
+
             elif restart_training_round == b"SERVER_INIT_NEXT_TRAINING_ROUND":
                 
                 print()
@@ -953,6 +959,8 @@ class Server:
 
                         self.send_updated_model_weights_to_client(self.server_socket)
                         self.server_socket.close()
+
+                self.client_host_port_dict_list = []
 
             else:
 

@@ -683,6 +683,7 @@ class Client:
             print("Last Training Round, client stopped training...")
             print()
 
+
     def gateway_reconnection(self, final_model_weights):
 
         self.client_socket.send(self.client_reconnection_id.encode("utf-8"))
@@ -694,8 +695,6 @@ class Client:
         #check if when msg just sent back it´s possible to solve the test
         gateway_connection_test = self.client_socket.recv(4096)
         gateway_connection_test = self.aes_client_decoding(gateway_connection_test)
-
-        print(gateway_connection_test, self.client_socket)
 
         if gateway_connection_test == b"CLIENT_WAIT":
 
@@ -753,43 +752,38 @@ class Client:
     def test_connect(self, final_model_weights):
         
         self.close_connection()
-        connected = False
 
-        while not connected:
+        while True:
 
             try:
 
-                    self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-                    gateway_address = (self.gateway_host, self.gateway_port)
+                gateway_address = (self.gateway_host, self.gateway_port)
 
-                    self.client_socket.connect(gateway_address)
-                    connected = True
+                self.client_socket.connect(gateway_address)
 
-                    print(f"Reconnection to Gateway-Server {self.gateway_host}:{self.gateway_port}")
+                print()
+                print(f"Reconnection to Gateway-Server {self.gateway_host}:{self.gateway_port}")
+                print()
+            
+                gateway_open_thread = self.client_socket.recv(1024)
 
-                    try:
-                        gateway_open_thread = self.client_socket.recv(1024)
+                if gateway_open_thread == b"OPEN_THREAD":
 
-                        if gateway_open_thread == b"OPEN_THREAD":
+                    print("Thread is open")
+                    print(self.client_socket)
+                    self.gateway_reconnection(final_model_weights)
 
-                            print("Thread is open")
-                            print(self.client_socket)
-                            self.gateway_reconnection(final_model_weights)
-
-                    except:
-                        print("Connection failed")
-                        self.test_connect(final_model_weights)
+                    #print("Connection failed")
+                    #self.test_connect(final_model_weights)
    
+                    break
             
             except ConnectionRefusedError:
                 print("Connection refused, retrying...")
                 time.sleep(5)  
 
-            except Exception as e:
-                print(f"Error: {e}")
-                break  
-            
 
     #sending model weights to gateway
     def send_model_weights(self, final_model_weights):
