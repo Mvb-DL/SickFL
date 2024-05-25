@@ -676,6 +676,7 @@ class Client:
         if self.last_training_round is False:
 #hier liegt das problem!
             #reconnect with gateway server to send model weights
+            time.sleep(5)
             self.test_connect(final_model_weights)
 
         else:
@@ -828,8 +829,6 @@ class Client:
                 self.server_socket_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.server_socket_client.bind((self.client_host, self.client_port))
                 self.server_socket_client.listen(1)
-
-                print(self.server_socket_client)
 
                 print()
                 print("Client in server position is waiting for client model weights from server")

@@ -82,6 +82,7 @@ class Server:
 
         self.client_host_port_dict = {}
         self.client_host_port_dict_list = []
+        self.last_client = False
 
         #deploy init smart contract
         gateway_contract, self.gateway_contract_dict = SmartContract(role="Gateway", participant_public_key=self.public
@@ -160,13 +161,17 @@ class Server:
             random_bytes = os.urandom(10)
             random_bytes_hash = self.hash_model(random_bytes)
 
-            random_test_byte_sequence = self.aes_client_encoding(random_bytes)
-            client_socket.send(random_test_byte_sequence)
+            print(random_bytes)
+
+           # random_test_byte_sequence = self.aes_client_encoding(random_bytes)
+            client_socket.send(random_bytes)
 
             client_test_byte_response = client_socket.recv(2048)
-            client_test_byte_response = self.aes_client_decoding(client_test_byte_response)
+            #client_test_byte_response = self.aes_client_decoding(client_test_byte_response)
 
-            print(client_test_byte_response , client_socket)
+            print()
+            print(2, client_test_byte_response)
+            print()
 
             if str(random_bytes_hash) == str(client_test_byte_response.decode("utf-8")):
 
@@ -178,11 +183,15 @@ class Server:
                 #put ids in list which have been already set
                 self.client_already_registered.append(new_reconnection_id)
 
-                client_reconnected = self.aes_client_encoding(new_reconnection_id.encode("utf-8"))
-                client_socket.send(client_reconnected)
+                #client_reconnected = self.aes_client_encoding(new_reconnection_id.encode("utf-8"))
+                client_socket.send(new_reconnection_id.encode("utf-8"))
 
-                client_host_port_dict = client_socket.recv(2048)
-                enc_client_host_port_dict = self.aes_client_decoding(client_host_port_dict)
+                enc_client_host_port_dict = client_socket.recv(2048)
+                #enc_client_host_port_dict = self.aes_client_decoding(client_host_port_dict)
+
+                print()
+                print(3, enc_client_host_port_dict)
+                print()
 
                 client_host_port_dict = pickle.loads(enc_client_host_port_dict)
 
@@ -193,11 +202,15 @@ class Server:
 
                 self.client_host_port_dict_list.append(self.client_host_port_dict)
 
-                client_host_port = self.aes_client_encoding(b"GATEWAY_RECEIVED_CLIENT_HOST_PORT")
-                client_socket.send(client_host_port)
+                #client_host_port = self.aes_client_encoding(b"GATEWAY_RECEIVED_CLIENT_HOST_PORT")
+                client_socket.send(b"GATEWAY_RECEIVED_CLIENT_HOST_PORT")
 
                 client_action_request = client_socket.recv(2048)
-                client_action_request = self.aes_client_decoding(client_action_request)
+                #client_action_request = self.aes_client_decoding(client_action_request)
+
+                print()
+                print(4, client_action_request)
+                print()
 
                 if client_action_request == b"CLIENT_WILL_SEND_MODEL_WEIGHTS":
 
@@ -221,6 +234,10 @@ class Server:
 
         gateway_input = client_socket.recv(2048)
 
+        print()
+        print(1, gateway_input)
+        print()
+
         if gateway_input != b"GATEWAY_READY_FOR_RSA":
 
             with self.lock:
@@ -240,7 +257,7 @@ class Server:
                         client_already_registered = self.aes_client_encoding(b"CLIENT_WAIT")
                         client_socket.send(client_already_registered)
 
-                        print(reconnection_id, "Client already registered")
+                        print(reconnection_id, "Client already connected")
                         client_socket.close()
 
                         time.sleep(3)
@@ -281,7 +298,7 @@ class Server:
             print(f"{len(self.open_connections)} running Connections")
 
         for connection in self.open_connections:
-            
+
             print("Open Connection ID: ", connection)
 
         print()
@@ -759,11 +776,11 @@ class Server:
     #get the model weights of the client
     def get_client_model_weights(self, client_socket):
 
-        ready_for_model_weights = self.aes_client_encoding(b"GATEWAY_READY_FOR_MODEL_WEIGHTS")
-        client_socket.send(ready_for_model_weights)
+        #ready_for_model_weights = self.aes_client_encoding(b"GATEWAY_READY_FOR_MODEL_WEIGHTS")
+        client_socket.send(b"GATEWAY_READY_FOR_MODEL_WEIGHTS")
         
-        enc_client_model_weights = client_socket.recv(65536)
-        dec_client_model_weights = self.aes_client_decoding(enc_client_model_weights)
+        dec_client_model_weights = client_socket.recv(65536)
+        #dec_client_model_weights = self.aes_client_decoding(enc_client_model_weights)
 
         final_client_model_weights = pickle.loads(dec_client_model_weights)
 
@@ -793,17 +810,17 @@ class Server:
             print("Client Smart Contract: ", client_smart_contract_model_weights)
             print()
 
-            client_model_weights_received = self.aes_client_encoding(b"CLIENT_MODEL_WEIGHTS_RECEIVED")
-            client_socket.send(client_model_weights_received)
+            #client_model_weights_received = self.aes_client_encoding(b"CLIENT_MODEL_WEIGHTS_RECEIVED")
+            client_socket.send(b"CLIENT_MODEL_WEIGHTS_RECEIVED")
 
             self.received_connection_weights += 1
 
             print("Received Connection Weights: ", self.received_connection_weights)
-            print("Required Connection Weights: ", 1)
+            print("Required Connection Weights: ", 2)
 
             client_socket.close()
 
-            if self.received_connection_weights >= 1:
+            if self.received_connection_weights >= 2:
 
                 print()
                 print("Connecting to aggregate server, sending client model weights...")
@@ -901,7 +918,7 @@ class Server:
                 print(self.client_host_port_dict_list)
 
                 #now gateway connects to the client and sends them the finished weights!
-                for client in self.client_host_port_dict_list:
+                for index, client in enumerate(self.client_host_port_dict_list):
 
                     self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -917,11 +934,15 @@ class Server:
                     if client_action_request == b"CLIENT_WAITING_FOR_MODEL_WEIGHTS_UPDATE":
 
                         print()
-                        print("Sending updated Model weights to client")
+                        print("Sending updated Model weights to client", client)
                         print()
 
+                        if index == len(self.client_host_port_dict_list) - 1:
+
+                            self.last_client = True
+
                         self.send_updated_model_weights_to_client(self.server_socket)
-                        self.server_socket.close()
+
 
                 self.client_host_port_dict_list = []
 
@@ -954,17 +975,16 @@ class Server:
                     if client_action_request == b"CLIENT_WAITING_FOR_MODEL_WEIGHTS_UPDATE":
 
                         print()
-                        print("Sending updated Model weights to client")
+                        print("Sending updated Model weights to client: ", client)
                         print()
 
                         self.send_updated_model_weights_to_client(self.server_socket)
-                        self.server_socket.close()
 
                 self.client_host_port_dict_list = []
 
-            else:
-
-                print("Error")
+            #all done than jump back in open server connection
+            self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.run_server()
             
 
     #checks if client really exists in BC and if model weights has changed
@@ -988,18 +1008,20 @@ class Server:
     def send_updated_model_weights_to_client(self, server_socket):
 
         server_socket.send(self.server_global_model_weights)
+        server_socket.close()
 
         print()
         print("Updated Model weights were sent to the client")
         print()
-
-        self.server_global_model_weights = None
-        server_socket.close()
-
+        
         #reset the socket to reopen the gateway again for every connection
         self.server_busy = False
-        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.run_server()
+
+        #if last client than set server models to none
+        if self.last_client:
+            self.server_global_model_weights = None
+            self.last_client = False
+
 
 
     #close server and client connection

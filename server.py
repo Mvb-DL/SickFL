@@ -59,8 +59,8 @@ class Server:
         self.pending_nodes = list()
         self.average_weights = {}
 
-        self.required_nodes = 1
-        self.max_rounds = 2
+        self.required_nodes = 2
+        self.max_rounds = 1
         
         self.check = False
         self.training_round = 0
