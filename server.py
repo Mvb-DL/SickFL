@@ -123,7 +123,7 @@ class Server:
 
         if gateway_open_thread == b"OPEN_THREAD":
 
-            self.server_socket.send(b"GATEWAY_READY_FOR_RSA")
+            self.server_socket.send(b"SERVER_READY_FOR_RSA")
 
             gateway_ready = self.server_socket.recv(1024)
 

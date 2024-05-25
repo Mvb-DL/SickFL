@@ -93,6 +93,7 @@ class Client:
 
         self.frames = {}
 
+        self.client_reconnection_set = set()
         self.last_training_round = False
 
         #wenn gateway mitrein
@@ -121,7 +122,7 @@ class Client:
 
             if gateway_open_thread == b"OPEN_THREAD":
 
-                self.client_socket.send(b"GATEWAY_READY_FOR_RSA")
+                self.client_socket.send(b"CLIENT_READY_FOR_RSA")
 
                 gateway_ready = self.client_socket.recv(1024)
 
@@ -400,6 +401,14 @@ class Client:
 
                                         self.enc_global_model = enc_model_gateway
 
+                                        #send that client received model and getting reconnection code
+                                        received_gateway_model = self.aes_client_encoding(b"RECEIVED_GATEWAY_MODEL")
+                                        self.client_socket.send(received_gateway_model)
+
+                                        client_reconnection_set = self.client_socket.recv(2048)
+                                        pickled_client_reconnection_set = self.aes_client_decoding(client_reconnection_set)
+                                        self.client_reconnection_set = pickle.loads(pickled_client_reconnection_set)
+
                                         #connect with server and receiving serverModelEncodeKey
                                         host, port = self.selected_server_connection_url.split(':')
 
@@ -408,6 +417,7 @@ class Client:
                                         self.close_connection()
                                         self.build_aggregate_server_connection(host, int(port))
         else:
+
             print("No Gateway Respond")
 
 
@@ -674,7 +684,7 @@ class Client:
         print("Client Model Weights saved and tries to reconnect to gateway...")
 
         if self.last_training_round is False:
-#hier liegt das problem!
+
             #reconnect with gateway server to send model weights
             self.test_connect(final_model_weights)
 
@@ -688,19 +698,9 @@ class Client:
 
         self.client_socket.send(self.client_reconnection_id.encode("utf-8"))
 
-        print()
-        print("Client Reconnection ID", self.client_reconnection_id)
-        print()
-
-        #check if when msg just sent back it´s possible to solve the test
-        gateway_connection_test = self.client_socket.recv(4096)
-        #gateway_connection_test = self.aes_client_decoding(gateway_connection_test)
-
-        print()
-        print(1, gateway_connection_test)
-        print()
-
-        if gateway_connection_test == b"CLIENT_WAIT":
+        gateway_aes_ready = self.client_socket.recv(4096)
+        
+        if gateway_aes_ready == b"CLIENT_WAIT":
 
             print()
             print("Client has to wait until aggregate server has finished")
@@ -708,53 +708,97 @@ class Client:
 
             self.test_connect(final_model_weights)
 
-        else:
-
-            gateway_connection_test_hash = self.hash_model(gateway_connection_test)
-
-            gateway_connection_test_hash = gateway_connection_test_hash.hexdigest()
-            gateway_connection_test_hash = gateway_connection_test_hash.encode("utf-8")
-
-            print(2, gateway_connection_test_hash)
-
-            #gateway_connection_test_hash = self.aes_client_encoding(gateway_connection_test_hash)
-            self.client_socket.send(gateway_connection_test_hash)
-
-            #get response from gateway with new reconnection id
-            new_reconnection_id = self.client_socket.recv(1024)
-            #new_reconnection_id  = self.aes_client_decoding(new_reconnection_id)
-            self.client_reconnection_id = new_reconnection_id.decode("utf-8") 
+        elif gateway_aes_ready == b"GATEWAY_READY_FOR_RSA":
 
             print()
-            print(3, new_reconnection_id)
+            print("Client Reconnection ID", self.client_reconnection_id)
             print()
 
-            print()
-            print("New Client Reconnection ID", self.client_reconnection_id)
-            print()
+            #send client public key for aes reconnection
+            client_public_key_message = self.public + self.delimiter_bytes + self.client_hash_public.encode('utf-8')
+            self.client_socket.send(client_public_key_message)   
 
-            client_host_port_dict = {
-                "host": self.client_host,
-                "port": self.client_port
-            }
+            tmpHash, GatewayPublicKeyHash, GatewayPublicKey = self.verify_gateway_keys()
 
-            enc_client_host_port_dict = pickle.dumps(client_host_port_dict)
+            if tmpHash == GatewayPublicKeyHash:
 
-            #client_host_port = self.aes_client_encoding(enc_client_host_port_dict)
-            self.client_socket.send(enc_client_host_port_dict)
+                print("Gateway keys verified")
 
-            received_client_host_port = self.client_socket.recv(1024)
-            #received_client_host_port = self.aes_client_decoding(received_client_host_port)
+                self.client_socket.send(b"GATEWAY_KEYS_VERIFIED_BY_CLIENT")
 
-            if received_client_host_port == b"GATEWAY_RECEIVED_CLIENT_HOST_PORT":
+                received_aes_data = self.client_socket.recv(2048)
 
-                if self.has_send_model_weights == False:
+                hashOfEightGateway, session, eightByteGateway = self.set_aes_encryption(received_aes_data)
 
-                    print()
-                    print("Sending client model weights")
-                    print()
+                if hashOfEightGateway == session: 
 
-                    self.send_model_weights(final_model_weights)
+                    print("Received aes set up")
+
+                    self.AESKey = bytes(eightByteGateway + eightByteGateway[::-1])
+
+                    #sends back shared secret if it´s correct
+                    public_key = RSA.import_key(GatewayPublicKey)
+                    cipher = PKCS1_OAEP.new(public_key)
+                    encrypted_data = cipher.encrypt(eightByteGateway)
+
+                    self.client_socket.send(encrypted_data)
+
+                    gateway_aes_msg = self.client_socket.recv(2048)
+                    decrypted_aes_data = self.aes_client_decoding(gateway_aes_msg)
+
+                    if decrypted_aes_data == b"AES_READY_CLIENT":
+
+                        aes_verified = self.aes_client_encoding(b"AES_VERIFIED_CLIENT")
+                        self.client_socket.send(aes_verified)
+
+                        server_wait_reconnection_code = self.client_socket.recv(1024)
+                        server_wait_reconnection_code = self.aes_client_decoding(server_wait_reconnection_code)
+
+                        if server_wait_reconnection_code == b"SERVER_WAIT_RECONNECTION_CODE":
+
+                            send_reconnection_set = self.aes_client_encoding(pickle.dumps(self.client_reconnection_set))
+                            self.client_socket.send(send_reconnection_set)
+
+                            print("Client sending reconnection set")
+
+                            #get response from gateway with new reconnection id
+                            new_reconnection_id = self.client_socket.recv(1024)
+                            new_reconnection_id  = self.aes_client_decoding(new_reconnection_id)
+                            self.client_reconnection_id = new_reconnection_id.decode("utf-8") 
+
+                            print()
+                            print(3, new_reconnection_id)
+                            print()
+
+                            print()
+                            print("New Client Reconnection ID", self.client_reconnection_id)
+                            print()
+
+                            client_host_port_dict = {
+                                "host": self.client_host,
+                                "port": self.client_port
+                            }
+
+                            client_host_port_dict = pickle.dumps(client_host_port_dict)
+
+                            enc_client_host_port_dict = self.aes_client_encoding(client_host_port_dict)
+                            self.client_socket.send(enc_client_host_port_dict)
+
+                            received_client_host_port = self.client_socket.recv(1024)
+                            received_client_host_port = self.aes_client_decoding(received_client_host_port)
+
+                            if received_client_host_port == b"GATEWAY_RECEIVED_CLIENT_HOST_PORT":
+                        
+                                if self.has_send_model_weights == False:
+                            
+                                    print()
+                                    print("Sending client model weights")
+                                    print()
+
+                                    self.send_model_weights(final_model_weights)
+
+            else:
+                print("Gateway keys are wrong")
 
 
     def test_connect(self, final_model_weights):
@@ -782,9 +826,6 @@ class Client:
                     print("Thread is open")
                     print(self.client_socket)
                     self.gateway_reconnection(final_model_weights)
-
-                    #print("Connection failed")
-                    #self.test_connect(final_model_weights)
    
                     break
             
@@ -796,21 +837,21 @@ class Client:
     #sending model weights to gateway
     def send_model_weights(self, final_model_weights):
 
-        #ready_send_model_weights = self.aes_client_encoding(b"CLIENT_WILL_SEND_MODEL_WEIGHTS")
-        self.client_socket.send(b"CLIENT_WILL_SEND_MODEL_WEIGHTS")
+        ready_send_model_weights = self.aes_client_encoding(b"CLIENT_WILL_SEND_MODEL_WEIGHTS")
+        self.client_socket.send(ready_send_model_weights)
 
         gateway_ready_model_weights = self.client_socket.recv(1024)
-        #gateway_ready_model_weights  = self.aes_client_decoding(gateway_ready_model_weights)
+        gateway_ready_model_weights  = self.aes_client_decoding(gateway_ready_model_weights)
 
         if gateway_ready_model_weights == b"GATEWAY_READY_FOR_MODEL_WEIGHTS":
 
             print("Gateway is waiting for Model Weights")
 
-            #final_model_weights = self.aes_client_encoding(final_model_weights)
+            final_model_weights = self.aes_client_encoding(final_model_weights)
             self.client_socket.send(final_model_weights)
 
             gateway_model_weights_received = self.client_socket.recv(1024)
-            #gateway_model_weights_received  = self.aes_client_decoding(gateway_model_weights_received)
+            gateway_model_weights_received  = self.aes_client_decoding(gateway_model_weights_received)
 
             if gateway_model_weights_received == b"CLIENT_MODEL_WEIGHTS_RECEIVED":
 

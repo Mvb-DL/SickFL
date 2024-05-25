@@ -84,6 +84,8 @@ class Server:
         self.client_host_port_dict_list = []
         self.last_client = False
 
+        self.client_reconnection_sets = []
+
         #deploy init smart contract
         gateway_contract, self.gateway_contract_dict = SmartContract(role="Gateway", participant_public_key=self.public
                                                                 ).open_contract(contract_path="Test.sol",
@@ -157,74 +159,60 @@ class Server:
     #client get´s after reconnection a random byte sequence encrypted in AES. If client is sending back the correct byte sequence, the client
     #is authenticated...
     def test_client_connection(self, client_socket, reconnection_id):
+            
+            client_host_port = self.aes_client_encoding(b"SERVER_WAIT_RECONNECTION_CODE")
+            client_socket.send(client_host_port)
 
-            random_bytes = os.urandom(10)
-            random_bytes_hash = self.hash_model(random_bytes)
+            client_reconnection_set = client_socket.recv(2048)
+            client_reconnection_set = self.aes_client_decoding(client_reconnection_set)
+            client_reconnection_set = pickle.loads(client_reconnection_set)
 
-            print(random_bytes)
+            for clients in self.client_reconnection_sets:
 
-           # random_test_byte_sequence = self.aes_client_encoding(random_bytes)
-            client_socket.send(random_bytes)
+                print(clients)
 
-            client_test_byte_response = client_socket.recv(2048)
-            #client_test_byte_response = self.aes_client_decoding(client_test_byte_response)
+                if clients == client_reconnection_set:
 
-            print()
-            print(2, client_test_byte_response)
-            print()
-
-            if str(random_bytes_hash) == str(client_test_byte_response.decode("utf-8")):
-
-                print("Client was successfully reconnected...")
-
-                #updated reonnection id in list
-                new_reconnection_id = self.update_connection(reconnection_id)
-
-                #put ids in list which have been already set
-                self.client_already_registered.append(new_reconnection_id)
-
-                #client_reconnected = self.aes_client_encoding(new_reconnection_id.encode("utf-8"))
-                client_socket.send(new_reconnection_id.encode("utf-8"))
-
-                enc_client_host_port_dict = client_socket.recv(2048)
-                #enc_client_host_port_dict = self.aes_client_decoding(client_host_port_dict)
-
-                print()
-                print(3, enc_client_host_port_dict)
-                print()
-
-                client_host_port_dict = pickle.loads(enc_client_host_port_dict)
-
-                #update dict with client reconnection id
-                client_host_port_dict["client_reconnection_id"] = new_reconnection_id
-
-                self.client_host_port_dict = client_host_port_dict
-
-                self.client_host_port_dict_list.append(self.client_host_port_dict)
-
-                #client_host_port = self.aes_client_encoding(b"GATEWAY_RECEIVED_CLIENT_HOST_PORT")
-                client_socket.send(b"GATEWAY_RECEIVED_CLIENT_HOST_PORT")
-
-                client_action_request = client_socket.recv(2048)
-                #client_action_request = self.aes_client_decoding(client_action_request)
-
-                print()
-                print(4, client_action_request)
-                print()
-
-                if client_action_request == b"CLIENT_WILL_SEND_MODEL_WEIGHTS":
-
-                    #calling function to get client model weights
                     print()
-                    print("Receiving Client Model Weights")
+                    print("Client was successfully reconnected...")
                     print()
 
-                    self.get_client_model_weights(client_socket)
+                    #updated reonnection id in list
+                    new_reconnection_id = self.update_connection(reconnection_id)
 
-            else:
+                    #put ids in list which have been already set
+                    self.client_already_registered.append(new_reconnection_id)
 
-                print("Client cannot be verified")
-                
+                    client_reconnected = self.aes_client_encoding(new_reconnection_id.encode("utf-8"))
+                    client_socket.send(client_reconnected)
+
+                    enc_client_host_port_dict = client_socket.recv(2048)
+                    enc_client_host_port_dict = self.aes_client_decoding(enc_client_host_port_dict)
+
+                    client_host_port_dict = pickle.loads(enc_client_host_port_dict)
+
+                    #update dict with client reconnection id
+                    client_host_port_dict["client_reconnection_id"] = new_reconnection_id
+
+                    self.client_host_port_dict = client_host_port_dict
+
+                    self.client_host_port_dict_list.append(self.client_host_port_dict)
+
+                    client_host_port = self.aes_client_encoding(b"GATEWAY_RECEIVED_CLIENT_HOST_PORT")
+                    client_socket.send(client_host_port)
+
+                    client_action_request = client_socket.recv(2048)
+                    client_action_request = self.aes_client_decoding(client_action_request)
+
+                    if client_action_request == b"CLIENT_WILL_SEND_MODEL_WEIGHTS":
+
+                        #calling function to get client model weights
+                        print()
+                        print("Receiving Client Model Weights")
+                        print()
+
+                        self.get_client_model_weights(client_socket)
+
 
     def handle_client(self, client_socket, client_address):
 
@@ -234,39 +222,7 @@ class Server:
 
         gateway_input = client_socket.recv(2048)
 
-        print()
-        print(1, gateway_input)
-        print()
-
-        if gateway_input != b"GATEWAY_READY_FOR_RSA":
-
-            with self.lock:
-
-                reconnection_id = gateway_input.decode("utf-8")
-
-                if reconnection_id in self.open_connections:
-
-                    if reconnection_id not in self.client_already_registered:
-
-                        print("Reconnection Id: ", reconnection_id)
-
-                        self.test_client_connection(client_socket, reconnection_id)
-
-                    elif reconnection_id in self.client_already_registered:
-                    
-                        client_already_registered = self.aes_client_encoding(b"CLIENT_WAIT")
-                        client_socket.send(client_already_registered)
-
-                        print(reconnection_id, "Client already connected")
-                        client_socket.close()
-
-                        time.sleep(3)
-                        self.server_busy = False
-                        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                        self.run_server()
-
-                        
-        elif gateway_input == b"GATEWAY_READY_FOR_RSA":
+        if gateway_input == b"SERVER_READY_FOR_RSA" or gateway_input == b"CLIENT_READY_FOR_RSA":
 
             client_socket.send(b"GATEWAY_READY_FOR_RSA")
 
@@ -284,6 +240,81 @@ class Server:
                 self.run_server()
 
 
+        elif gateway_input != b"SERVER_READY_FOR_RSA" or gateway_input != b"CLIENT_READY_FOR_RSA":
+
+            with self.lock:
+
+                reconnection_id = gateway_input.decode("utf-8")
+
+                if reconnection_id in self.open_connections:
+
+                    if reconnection_id not in self.client_already_registered:
+
+                        print("Reconnection Id: ", reconnection_id)
+
+                        client_socket.send(b"GATEWAY_READY_FOR_RSA")
+
+                        #set up aes again
+                        tmpHash, clientPublicHash, client_public_key = self.verify_client_keys(client_socket)
+
+                        if tmpHash == clientPublicHash:
+
+                            #send the public key of gateway again to the client
+                            client_socket.send(self.public + self.delimiter_bytes + self.server_hash_public.encode('utf-8'))
+
+                            client_return_aes_verify = client_socket.recv(4096)
+
+                            if client_return_aes_verify == b"GATEWAY_KEYS_VERIFIED_BY_CLIENT":
+
+                                fSendEncClient = self.set_aes_client_encryption(client_public_key)
+
+                                client_socket.send(bytes(fSendEncClient + self.delimiter_bytes + self.public))
+
+                                clientPH = client_socket.recv(4096)
+
+                                if clientPH:
+                                
+                                    private_key = RSA.import_key(self.private)
+                                    cipher = PKCS1_OAEP.new(private_key)
+                                    decrypted_data_client = cipher.decrypt(clientPH)
+
+                                    if decrypted_data_client == self.eightByteClient:
+                                    
+                                        encrypted_data = self.aes_client_encoding(b"AES_READY_CLIENT")
+                                        client_socket.send(encrypted_data)
+
+                                        aes_setup = client_socket.recv(4096)
+                                        aes_setup = self.aes_client_decoding(aes_setup)
+
+                                        if aes_setup == b"AES_VERIFIED_CLIENT":
+
+                                            print("AES is verified")
+
+                                            self.test_client_connection(client_socket, reconnection_id)
+
+                        else:
+                            print("Public Key from Client not verified")
+
+                    elif reconnection_id in self.client_already_registered:
+                    
+                        #client_already_registered = self.aes_client_encoding(b"CLIENT_WAIT")
+                        client_socket.send(b"CLIENT_WAIT")
+
+                        print(reconnection_id, "Client already connected")
+                        client_socket.close()
+
+                        time.sleep(3)
+                        self.server_busy = False
+                        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        self.run_server()
+
+                else:
+
+                    print()
+                    print("Client passed wrong client reconnection id")
+                    print()
+
+
     #get request from client
     def get_participant_request(self):
 
@@ -294,11 +325,9 @@ class Server:
         print("***********************************************************")
 
         if len(self.open_connections) > 0:
-
             print(f"{len(self.open_connections)} running Connections")
 
         for connection in self.open_connections:
-
             print("Open Connection ID: ", connection)
 
         print()
@@ -601,8 +630,8 @@ class Server:
 
                                     if wait_reconnection_id == b"WAIT_FOR_RECON_ID":
                                     
-                                        client_reconnection_id = self.aes_client_encoding(client_reconnection_id.encode("utf-8"))
-                                        client_socket.send(client_reconnection_id)
+                                        enc_client_reconnection_id = self.aes_client_encoding(client_reconnection_id.encode("utf-8"))
+                                        client_socket.send(enc_client_reconnection_id)
 
                                         got_reconnection_id = client_socket.recv(1024)
                                         got_reconnection_id  = self.aes_client_decoding(got_reconnection_id)
@@ -651,9 +680,24 @@ class Server:
 
                                                 print("Sending enc model to client...")
 
-                                                #jumping to open connection
-                                                self.server_busy = False
-                                                self.get_participant_request()
+                                                client_received_gateway_model = client_socket.recv(1024)
+                                                client_received_gateway_model = self.aes_client_decoding(client_received_gateway_model)
+
+                                                if client_received_gateway_model == b"RECEIVED_GATEWAY_MODEL":
+
+                                                    client_reconnection_code = self.register_connection()
+
+                                                    client_reconnection_set = {client_reconnection_id, client_reconnection_code}
+                                                    pickled_client_reconnection_set = pickle.dumps(client_reconnection_set)
+
+                                                    self.client_reconnection_sets.append(client_reconnection_set)
+
+                                                    send_client_reconnection_set = self.aes_client_encoding(pickled_client_reconnection_set)
+                                                    client_socket.send(send_client_reconnection_set)
+
+                                                    #jumping to open connection
+                                                    self.server_busy = False
+                                                    self.get_participant_request()
 
                                         else:
                                             print("Client closed connection")
@@ -776,11 +820,11 @@ class Server:
     #get the model weights of the client
     def get_client_model_weights(self, client_socket):
 
-        #ready_for_model_weights = self.aes_client_encoding(b"GATEWAY_READY_FOR_MODEL_WEIGHTS")
-        client_socket.send(b"GATEWAY_READY_FOR_MODEL_WEIGHTS")
+        ready_for_model_weights = self.aes_client_encoding(b"GATEWAY_READY_FOR_MODEL_WEIGHTS")
+        client_socket.send(ready_for_model_weights)
         
         dec_client_model_weights = client_socket.recv(65536)
-        #dec_client_model_weights = self.aes_client_decoding(enc_client_model_weights)
+        dec_client_model_weights = self.aes_client_decoding(dec_client_model_weights)
 
         final_client_model_weights = pickle.loads(dec_client_model_weights)
 
@@ -810,8 +854,8 @@ class Server:
             print("Client Smart Contract: ", client_smart_contract_model_weights)
             print()
 
-            #client_model_weights_received = self.aes_client_encoding(b"CLIENT_MODEL_WEIGHTS_RECEIVED")
-            client_socket.send(b"CLIENT_MODEL_WEIGHTS_RECEIVED")
+            client_model_weights_received = self.aes_client_encoding(b"CLIENT_MODEL_WEIGHTS_RECEIVED")
+            client_socket.send(client_model_weights_received)
 
             self.received_connection_weights += 1
 
@@ -835,10 +879,6 @@ class Server:
                 print()
                 print("Waiting for more client model weights")
                 print()
-
-                #self.collected_client_model_weights.append(client_model_weights)
-
-                #print()
 
                 self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.run_server()
