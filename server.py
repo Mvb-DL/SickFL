@@ -557,7 +557,7 @@ class Server:
             print("Max Rounds of Training: ", self.max_rounds, "Round Number: ", int(self.training_round))
             print()
 
-#grund training abzubrechen
+#grund training abzubrechen???
             if int(self.max_rounds) <= int(self.training_round):
                 
                 server_waiting_model_weights = self.aes_server_encoding(b"TRAINING_FINISHED")

@@ -73,12 +73,12 @@ class Server:
         self.aggregate_server_smart_contract = None
         self.gateway_contract_dict = None
 
-
         self.server_busy = False 
         self.required_client_weights = len(self.connected_client_nodes)
         self.received_connection_weights = 0
         self.client_already_registered = []
 
+        self.lock = threading.Lock()
 
         self.client_host_port_dict = {}
         self.client_host_port_dict_list = []
@@ -165,6 +165,8 @@ class Server:
             client_test_byte_response = client_socket.recv(2048)
             client_test_byte_response = self.aes_client_decoding(client_test_byte_response)
 
+            print(client_test_byte_response , client_socket)
+
             if str(random_bytes_hash) == str(client_test_byte_response.decode("utf-8")):
 
                 print("Client was successfully reconnected...")
@@ -220,28 +222,30 @@ class Server:
 
         if gateway_input != b"GATEWAY_READY_FOR_RSA":
 
-            reconnection_id = gateway_input.decode("utf-8")
+            with self.lock:
 
-            if reconnection_id in self.open_connections:
+                reconnection_id = gateway_input.decode("utf-8")
 
-                if reconnection_id not in self.client_already_registered:
+                if reconnection_id in self.open_connections:
 
-                    print("Reconnection Id: ", reconnection_id)
+                    if reconnection_id not in self.client_already_registered:
 
-                    self.test_client_connection(client_socket, reconnection_id)
+                        print("Reconnection Id: ", reconnection_id)
 
-                elif reconnection_id in self.client_already_registered:
+                        self.test_client_connection(client_socket, reconnection_id)
+
+                    elif reconnection_id in self.client_already_registered:
                     
-                    client_already_registered = self.aes_client_encoding(b"CLIENT_WAIT")
-                    client_socket.send(client_already_registered)
+                        client_already_registered = self.aes_client_encoding(b"CLIENT_WAIT")
+                        client_socket.send(client_already_registered)
 
-                    print(reconnection_id, "Client already registered")
-                    client_socket.close()
+                        print(reconnection_id, "Client already registered")
+                        client_socket.close()
 
-                    time.sleep(3)
-                    self.server_busy = False
-                    self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    self.run_server()
+                        time.sleep(3)
+                        self.server_busy = False
+                        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        self.run_server()
 
                         
         elif gateway_input == b"GATEWAY_READY_FOR_RSA":
@@ -791,7 +795,7 @@ class Server:
             self.received_connection_weights += 1
 
             print("Received Connection Weights: ", self.received_connection_weights)
-            print("Required Connection Weights: ", 2)
+            print("Required Connection Weights: ", 1)
 
             client_socket.close()
 
@@ -816,8 +820,6 @@ class Server:
 
                 self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.run_server()
-
-
 
         else:
             print("Modelweights of Client were changed. Stop transmitting.")
@@ -889,10 +891,33 @@ class Server:
             if restart_training_round == b"TRAINING_FINISHED":
                 
                 print()
-                print("Training finished by Server...")
+                print("Training finished by Server... Last sending to client")
                 print()
 
-                self.close_connection()
+                print(self.client_host_port_dict_list)
+
+                #now gateway connects to the client and sends them the finished weights!
+                for client in self.client_host_port_dict_list:
+
+                    self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+                    client_server_host = client['host']
+                    client_server_port = client['port']
+
+                    self.server_socket.connect((client_server_host, client_server_port))
+
+                    self.server_socket.send(b"GATEWAY_SEND_UPDATED_MODEL_WEIGHTS_FINAL")
+
+                    client_action_request = self.server_socket.recv(1024)
+
+                    if client_action_request == b"CLIENT_WAITING_FOR_MODEL_WEIGHTS_UPDATE":
+
+                        print()
+                        print("Sending updated Model weights to client")
+                        print()
+
+                        self.send_updated_model_weights_to_client(self.server_socket)
+                        self.server_socket.close()
 
             elif restart_training_round == b"SERVER_INIT_NEXT_TRAINING_ROUND":
                 
@@ -928,9 +953,6 @@ class Server:
 
                         self.send_updated_model_weights_to_client(self.server_socket)
                         self.server_socket.close()
-
-
-            
 
             else:
 

@@ -93,6 +93,8 @@ class Client:
 
         self.frames = {}
 
+        self.last_training_round = False
+
         #wenn gateway mitrein
         self.entry_point()
 
@@ -139,7 +141,6 @@ class Client:
         print()
 
         return True
-
 
 
     def build_gui(self, master):
@@ -499,6 +500,7 @@ class Client:
 
             #is changing the gui before getting the model from the aggergate server
             self.client_server_socket.send(b"SERVER_KEYS_VERIFIED_BY_CLIENT")
+            
             print("Serverkeys verified by Client")
 
             #set up AES with Server
@@ -671,9 +673,15 @@ class Client:
 
         print("Client Model Weights saved and tries to reconnect to gateway...")
 
-        #reconnect with gateway server to send model weights
-        self.test_connect(final_model_weights)
+        if self.last_training_round is False:
+#hier liegt das problem!
+            #reconnect with gateway server to send model weights
+            self.test_connect(final_model_weights)
 
+        else:
+            print()
+            print("Last Training Round, client stopped training...")
+            print()
 
     def gateway_reconnection(self, final_model_weights):
 
@@ -740,14 +748,6 @@ class Client:
                     print()
 
                     self.send_model_weights(final_model_weights)
-
-            #elif self.has_send_model_weights == True:
-            
-                #print()
-                #print("Receiving Model weights update")
-                #print()
-
-                #self.get_updated_model_weights()
 
 
     def test_connect(self, final_model_weights):
@@ -838,6 +838,19 @@ class Client:
                     gateway_ready = gateway_socket.recv(1024)
 
                     if gateway_ready == b"GATEWAY_SEND_UPDATED_MODEL_WEIGHTS":
+
+                        gateway_socket.send(b"CLIENT_WAITING_FOR_MODEL_WEIGHTS_UPDATE")
+            
+                        print()
+                        print("Receiving Model weights update from gateway")
+                        print()
+
+                        self.get_updated_model_weights(gateway_socket)
+
+                    elif gateway_ready == b"GATEWAY_SEND_UPDATED_MODEL_WEIGHTS_FINAL":
+
+                        #set last round to stop training afterwards
+                        self.last_training_round = True
 
                         gateway_socket.send(b"CLIENT_WAITING_FOR_MODEL_WEIGHTS_UPDATE")
             
