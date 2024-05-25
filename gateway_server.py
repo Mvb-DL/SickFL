@@ -827,6 +827,7 @@ class Server:
                 print()
 
                 #connect to aggregate server if enough model weights were collected!
+                self.received_connection_weights = 0
                 self.connect_aggregate_server(dec_client_model_weights)
 
             else:
@@ -959,7 +960,7 @@ class Server:
                 print(self.client_host_port_dict_list)
 
                 #now gateway connects to the client and sends them the finished weights!
-                for client in self.client_host_port_dict_list:
+                for index, client in enumerate(self.client_host_port_dict_list):
 
                     self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -977,6 +978,10 @@ class Server:
                         print()
                         print("Sending updated Model weights to client: ", client)
                         print()
+
+                        if index == len(self.client_host_port_dict_list) - 1:
+
+                            self.last_client = True
 
                         self.send_updated_model_weights_to_client(self.server_socket)
 
