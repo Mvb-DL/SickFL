@@ -7,6 +7,12 @@ from Crypto.Cipher import PKCS1_OAEP
 from Crypto import Random
 import numpy as np
 from keras.models import model_from_json
+from commands.server_commands import commands
+
+
+def get_command_value(command_key):
+    return commands.get(command_key)
+
 
 #hash the model
 def hash_model(global_model):

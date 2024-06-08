@@ -74,7 +74,7 @@ class Server:
         self.gateway_contract_dict = None
 
         self.server_busy = False 
-        self.required_client_weights = len(self.connected_client_nodes)
+        self.required_client_weights = 1
         self.received_connection_weights = 0
         self.client_already_registered = []
 
@@ -83,7 +83,6 @@ class Server:
         self.client_host_port_dict = {}
         self.client_host_port_dict_list = []
         self.last_client = False
-
         self.client_reconnection_sets = []
 
         #deploy init smart contract
@@ -156,6 +155,15 @@ class Server:
         return new_reconnection_id
     
 
+    def auth_reconnection_set(self, client_reconnection_set):
+
+        for clients in self.client_reconnection_sets:
+
+                if clients == client_reconnection_set:
+
+                    return True
+
+
     #client get´s after reconnection a random byte sequence encrypted in AES. If client is sending back the correct byte sequence, the client
     #is authenticated...
     def test_client_connection(self, client_socket, reconnection_id):
@@ -170,11 +178,10 @@ class Server:
             #updated reonnection id in list
             new_reconnection_id = self.update_connection(reconnection_id)
 
-            for clients in self.client_reconnection_sets:
+            print(self.open_connections)
 
-                print(clients)
+            if self.auth_reconnection_set(client_reconnection_set):
 
-                if clients == client_reconnection_set:
 
                     print()
                     print("Client was successfully reconnected...")
@@ -212,6 +219,10 @@ class Server:
                         print()
 
                         self.get_client_model_weights(client_socket)
+
+            else:
+
+                print("Client cannot reconnect!")
 
 
     def handle_client(self, client_socket, client_address):
@@ -288,8 +299,6 @@ class Server:
 
                                         if aes_setup == b"AES_VERIFIED_CLIENT":
 
-                                            print("AES is verified")
-
                                             self.test_client_connection(client_socket, reconnection_id)
 
                         else:
@@ -297,7 +306,6 @@ class Server:
 
                     elif reconnection_id in self.client_already_registered:
                     
-                        #client_already_registered = self.aes_client_encoding(b"CLIENT_WAIT")
                         client_socket.send(b"CLIENT_WAIT")
 
                         print(reconnection_id, "Client already connected")
@@ -860,11 +868,11 @@ class Server:
             self.received_connection_weights += 1
 
             print("Received Connection Weights: ", self.received_connection_weights)
-            print("Required Connection Weights: ", 2)
+            print("Required Connection Weights: ", self.required_client_weights)
 
             client_socket.close()
 
-            if self.received_connection_weights >= 2:
+            if self.received_connection_weights >= self.required_client_weights:
 
                 print()
                 print("Connecting to aggregate server, sending client model weights...")

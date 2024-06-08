@@ -16,8 +16,9 @@ from data import get_data
 import threading
 from sklearn.utils import shuffle
 from utils import decode_dict, encode_dict
-
 from utils import ClientValidationContainer
+
+from commands.server_commands import commands
 
 class Server:
 
@@ -59,7 +60,7 @@ class Server:
         self.pending_nodes = list()
         self.average_weights = {}
 
-        self.required_nodes = 2
+        self.required_nodes = 1
         self.max_rounds = 2
         
         self.check = False
@@ -95,9 +96,11 @@ class Server:
 
         self.base_smart_contract = None
         self.aggregate_server_smart_contract = None
-        
+
         self.set_up_database()
 
+    def get_command_value(self, command_key):
+        return commands.get(command_key)
 
     def set_up_database(self):
         
@@ -121,13 +124,13 @@ class Server:
 
         gateway_open_thread = self.server_socket.recv(1024)
 
-        if gateway_open_thread == b"OPEN_THREAD":
+        if gateway_open_thread == self.get_command_value("command25"):
 
-            self.server_socket.send(b"SERVER_READY_FOR_RSA")
+            self.server_socket.send(self.get_command_value("command26"))
 
             gateway_ready = self.server_socket.recv(1024)
 
-            if gateway_ready == b"GATEWAY_READY_FOR_RSA":
+            if gateway_ready == self.get_command_value("command27"):
 
                 self.send_rsa_keys()
 
@@ -244,15 +247,15 @@ class Server:
                 gateway_aes_msg = self.server_socket.recv(2048)
                 decrypted_aes_data = self.aes_server_decoding(gateway_aes_msg)
 
-                if decrypted_aes_data == b"AES_READY":
+                if decrypted_aes_data == self.get_command_value("command1"):
                     
-                        aes_verified = self.aes_server_encoding(b"AES_VERIFIED")
+                        aes_verified = self.aes_server_encoding(self.get_command_value("command2"))
                         self.server_socket.send(aes_verified)
 
                         get_connection_url = self.server_socket.recv(4096)
                         get_connection_url = self.aes_server_decoding(get_connection_url)
 
-                        if b"GET_CONNECTION_URL" == get_connection_url:
+                        if self.get_command_value("command3") == get_connection_url:
 
                             #sending url of server to save in BC
                             connection_url = self.aes_server_encoding(self.connection_url.encode("utf-8"))
@@ -262,7 +265,7 @@ class Server:
 
                             if gateway_respond:
                                 
-                                read_smart_contract = self.aes_server_encoding(b"READY_SMART_CONTRACT")
+                                read_smart_contract = self.aes_server_encoding(self.get_command_value("command4"))
                                 self.server_socket.send(read_smart_contract)
 
                                 #aggregate-server gets smart contract
@@ -276,7 +279,7 @@ class Server:
                                 print("")
                                 print("***********************************************************")
 
-                                read_smart_contract = self.aes_server_encoding(b"RECEIVED_SMART_CONTRACT_DATA")
+                                read_smart_contract = self.aes_server_encoding(self.get_command_value("command5"))
                                 self.server_socket.send(read_smart_contract)
                                 
                                 #save account adress to handle bc actions later on
@@ -387,7 +390,7 @@ class Server:
         gateway_got_enc_encryption_key = self.server_socket.recv(1024)
         gateway_got_enc_encryption_key = self.aes_server_decoding(gateway_got_enc_encryption_key)
 
-        if gateway_got_enc_encryption_key == b"GOT_ENC_ENCRYPTION_KEY":
+        if gateway_got_enc_encryption_key == self.get_command_value("command6"):
 
             encrypted_model_hash_dict = self.aes_server_encoding(encrypted_model_hash_dict)
             self.server_socket.sendall(encrypted_model_hash_dict)
@@ -397,9 +400,9 @@ class Server:
             gateway_got_enc_model = self.server_socket.recv(1024)
             gateway_got_enc_model = self.aes_server_decoding(gateway_got_enc_model)
 
-            if gateway_got_enc_model == b"GOT_ENC_MODEL_DATA":
+            if gateway_got_enc_model == self.get_command_value("command7"):
                     
-                    get_smart_contract = self.aes_server_encoding(b"GET_SMART_CONTRACT")
+                    get_smart_contract = self.aes_server_encoding(self.get_command_value("command8"))
                     self.server_socket.send(get_smart_contract)
 
                     #getting base smart contract
@@ -411,7 +414,7 @@ class Server:
 
                     print("Gateway Smart Contract Set Up!")
 
-                    received_smart_contract = self.aes_server_encoding(b"RECEIVED_BASE_SMART_CONTRACT")
+                    received_smart_contract = self.aes_server_encoding(self.get_command_value("command9"))
                     self.server_socket.send(received_smart_contract)
 
                     #getting server smart contract from gatewayserver
@@ -509,7 +512,7 @@ class Server:
 
             print("Gateway is successfully reconnected with Server...")
 
-            server_waiting_model_weights = self.aes_server_encoding(b"SERVER_WAITING_MODEL_WEIGHTS")
+            server_waiting_model_weights = self.aes_server_encoding(self.get_command_value("command10"))
             client_socket.send(server_waiting_model_weights)
 
             #getting the model weights from the gateway server
@@ -545,7 +548,7 @@ class Server:
         received_gateway_model_weights = client_socket.recv(2048)
         received_gateway_model_weights = self.aes_server_decoding(received_gateway_model_weights)
 
-        if received_gateway_model_weights == b"GATEWAY_RECEIVED_SERVER_MODEL_WEIGHTS":
+        if received_gateway_model_weights == self.get_command_value("command11"):
 
             #if sending sucessfull, when model weights were not changed!
             self.average_client_model_weights = None
@@ -560,7 +563,7 @@ class Server:
 #grund training abzubrechen???
             if int(self.max_rounds) <= int(self.training_round):
                 
-                server_waiting_model_weights = self.aes_server_encoding(b"TRAINING_FINISHED")
+                server_waiting_model_weights = self.aes_server_encoding(self.get_command_value("command12"))
                 client_socket.send(server_waiting_model_weights)
 
                 print("All Rounds were finished successfully...")
@@ -568,7 +571,7 @@ class Server:
 
             else:
 
-                server_waiting_model_weights = self.aes_server_encoding(b"SERVER_INIT_NEXT_TRAINING_ROUND")
+                server_waiting_model_weights = self.aes_server_encoding(self.get_command_value("command13"))
                 client_socket.send(server_waiting_model_weights)
                 #close old connection
                 self.close_connection()
@@ -707,16 +710,16 @@ class Server:
                 #checks if gateway or client is connecting
                 connection_request = client_socket.recv(2048)
 
-                if connection_request != b"CLIENT_READY_FOR_RSA":
+                if connection_request != self.get_command_value("command14"):
 
                     #checks if gateway will reconnect
-                    if connection_request == b"GATEWAY_READY_FOR_RECONNECTION":
+                    if connection_request == self.get_command_value("command15"):
 
                         self.test_gateway_connection(client_socket)
 
                 else:
 
-                    client_socket.send(b"SERVER_READY_FOR_RSA")
+                    client_socket.send(self.get_command_value("command16"))
 
                     tmpHash, clientPublicHash, ClientPublicKey = self.verify_client_keys(client_socket)
 
@@ -810,7 +813,7 @@ class Server:
         client_ack_server_keys = client_socket.recv(1024)
 
         #wait for response before building session keys
-        if client_ack_server_keys == b"SERVER_KEYS_VERIFIED_BY_CLIENT":
+        if client_ack_server_keys == self.get_command_value("command17"):
 
             #after exchanging rsa keys, build up aes encryption
             fSendEnc = self.build_server_client_aes_encryption(client_public_key)
@@ -826,18 +829,18 @@ class Server:
 
                 if decrypted_data_client == self.eightByteClient:
 
-                    encrypted_data = self.aes_client_encoding(b"AES_READY_CLIENT_BY_SERVER")
+                    encrypted_data = self.aes_client_encoding(self.get_command_value("command18"))
                     client_socket.send(encrypted_data)
 
                     client_aes_ready = client_socket.recv(4096)
                     client_aes_ready = self.aes_client_decoding(client_aes_ready)
 
                     #client and server are now ready for fully aes encryption
-                    if client_aes_ready == b"CLIENT_AES_READY":
+                    if client_aes_ready == self.get_command_value("command19"):
 
                         print("Client and Server are ready for fully aes encryption")
 
-                        wait_client_smart_contract = self.aes_client_encoding(b"WAIT_CLIENT_SMART_CONTRACT")
+                        wait_client_smart_contract = self.aes_client_encoding(self.get_command_value("command20"))
                         client_socket.send(wait_client_smart_contract)
 
                         client_smart_contract = client_socket.recv(4096)
@@ -850,7 +853,7 @@ class Server:
 
                         if bool(server_smart_contract_data) == True:
                             
-                            wait_enc_model_and_id = self.aes_client_encoding(b"WAIT_ENC_MODEL_AND_ID")
+                            wait_enc_model_and_id = self.aes_client_encoding(self.get_command_value("command21"))
                             client_socket.send(wait_enc_model_and_id)
                             
                             enc_client_model_hash = client_socket.recv(4096)
@@ -869,13 +872,13 @@ class Server:
                                 final_model_verification = client_socket.recv(1024)
                                 final_model_verification = self.aes_client_decoding(final_model_verification)
 
-                                if final_model_verification == b"RECEIVED_FINAL_MODEL_BY_CLIENT":
+                                if final_model_verification == self.get_command_value("command22"):
                                     
                                     #Data Length Params
                                     #set up the server data to train it´s own model
                                     data_length_params = self.build_pre_trained_server_model()
 
-                                    waiting_client_data_hash = self.aes_client_encoding(b"WAITING_FOR_CLIENT_DATA_HASH")
+                                    waiting_client_data_hash = self.aes_client_encoding(self.get_command_value("command23"))
                                     client_socket.send(waiting_client_data_hash)
 
                                     #set up training validation container for client
@@ -915,9 +918,10 @@ class Server:
                                         if len(self.connected_nodes) >= self.required_nodes:
 
                                             for client in self.connected_clients:
+
                                                 print(client)
 
-                                                client_accessed = self.aes_client_encoding(b"CLIENT_ACCESSED")
+                                                client_accessed = self.aes_client_encoding(self.get_command_value("command24"))
                                                 client.send(client_accessed)
 
                                             self.run_server()

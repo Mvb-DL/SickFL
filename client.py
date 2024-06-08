@@ -16,6 +16,7 @@ from SmartContract.client_smart_contract import ClientSmartContract
 from utils import decode_dict
 import numpy as np
 import secrets
+from commands.client_commands import commands
 
 from client_gui.ClientGui import RegistrationPage, GatewaySelectPage, ModelSelectPage, ValidationPage, TrainingPage
 
@@ -52,8 +53,6 @@ class Client:
         #build up server connection
         self.host = '127.0.0.1'
         self.port = 12345         
-
-        
 
         #GUI STUFF
         self.entry = tk.Entry(master)
@@ -95,6 +94,9 @@ class Client:
 
         self.client_reconnection_set = set()
         self.last_training_round = False
+
+        def get_command_value(self, command_key):
+            return commands.get(command_key)
 
         #wenn gateway mitrein
         self.entry_point()
