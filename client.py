@@ -17,7 +17,6 @@ from utils import decode_dict
 import numpy as np
 import secrets
 from commands.client_commands import commands
-
 from client_gui.ClientGui import RegistrationPage, GatewaySelectPage, ModelSelectPage, ValidationPage, TrainingPage
 
 
@@ -132,7 +131,6 @@ class Client:
 
                     self.show_frame(RegistrationPage)
 
-
     def build_client_server(self):
 
         self.server_socket_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -144,7 +142,6 @@ class Client:
         print()
 
         return True
-
 
     def build_gui(self, master):
 
@@ -174,7 +171,6 @@ class Client:
         print("called gateway response")
         return True
  
-
     def send_register_data(self):
         print("called send register data")
         self.show_frame(ModelSelectPage)
@@ -633,6 +629,11 @@ class Client:
 
                                             self.start_local_training()
                                         
+                                        elif client_allowed == b"DETECTED_ANOMALY":
+
+                                            print("Server detected anomaly")
+                                            self.close_connection()
+
                                         else:
                                             print("Client cannot access")
                                             self.close_connection()
@@ -767,10 +768,6 @@ class Client:
                             new_reconnection_id = self.client_socket.recv(1024)
                             new_reconnection_id  = self.aes_client_decoding(new_reconnection_id)
                             self.client_reconnection_id = new_reconnection_id.decode("utf-8") 
-
-                            print()
-                            print(3, new_reconnection_id)
-                            print()
 
                             print()
                             print("New Client Reconnection ID", self.client_reconnection_id)

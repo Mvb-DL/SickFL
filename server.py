@@ -97,6 +97,8 @@ class Server:
         self.base_smart_contract = None
         self.aggregate_server_smart_contract = None
 
+        self.client_deviation_list = []
+
         self.set_up_database()
 
     def get_command_value(self, command_key):
@@ -262,8 +264,9 @@ class Server:
                             self.server_socket.send(connection_url)
 
                             gateway_respond = self.server_socket.recv(4096)
+                            gateway_respond = self.aes_server_decoding(gateway_respond)
 
-                            if gateway_respond:
+                            if gateway_respond == b"SERVER_ACCEPTED_FROM_GATEWAY":
                                 
                                 read_smart_contract = self.aes_server_encoding(self.get_command_value("command4"))
                                 self.server_socket.send(read_smart_contract)
@@ -417,20 +420,10 @@ class Server:
                     received_smart_contract = self.aes_server_encoding(self.get_command_value("command9"))
                     self.server_socket.send(received_smart_contract)
 
-                    #getting server smart contract from gatewayserver
-                    enc_serialized_aggregate_server_smart_contract = self.server_socket.recv(16384)
-                    serialized_aggregate_server_smart_contract = self.aes_server_decoding(enc_serialized_aggregate_server_smart_contract)
-                    server_smart_contract_dict = pickle.loads(serialized_aggregate_server_smart_contract)
-
-                    self.aggregate_server_smart_contract = ServerSmartContract().rebuild_smart_contract(server_smart_contract_dict)
-
-                    print("Server Smart Contract Set Up!")
-
                     #hash the enc model
                     encrypted_model_hash = self.hash_model(self.enc_global_model)
 
                     print("Final Account Address", self.account_address)
-
 
                     server_model_set_up = ServerSmartContract().set_up_global_model(
                                                                                 encrypted_model_hash.hexdigest(),
@@ -462,7 +455,7 @@ class Server:
         return hashed_global_model
     
 
-        #encrypt globale model with server model encode key
+    #encrypt globale model with server model encode key
     def encrypt_global_model(self, global_model):
         
         server_model_decode_key = Fernet.generate_key()
@@ -492,8 +485,6 @@ class Server:
         return pk_enc_encrypt_key
 
 
-    #client get´s after reconnection a random byte sequence encrypted in AES. If client is sending back the correct byte sequence, the client
-    #is authenticated...
     def test_gateway_connection(self, client_socket):
 
         random_bytes = os.urandom(10)
@@ -599,6 +590,7 @@ class Server:
             #save final_client_model_weights
             self.save_client_model_weights(client_model_weights, client_socket)
 
+
     #save the client model weights in the database
     def save_client_model_weights(self, client_model_weights, client_socket):
 
@@ -679,6 +671,8 @@ class Server:
 
         #return updated model weights to gateway
         self.average_client_model_weights = average_client_model_weights
+
+#Nochmal Testlauf durch Server nach Modellgewichts aggregierung, ergebnis des Modells
 
         self.send_updated_model_weights(client_socket)
 
@@ -908,7 +902,9 @@ class Server:
                                     
                                     client_model_test_validation = pickle.loads(decrypted_message)
 
+#Der Server soll mehrere Client Resultate sammeln
 
+                                    #get results of client and test if its malicious
                                     if self.validate_client_model_performance(server_test_loss,
                                                                                server_test_accuracy,
                                                                                client_model_test_validation):
@@ -931,8 +927,17 @@ class Server:
                                             self.run_server()
 
                                     else:
-                                        client_socket.close()        
-                                        print("Detected Anomaly in Client Model Result")
+
+                                        if len(self.connected_nodes) >= self.required_nodes:
+
+                                            for client in self.connected_clients:
+
+                                                client_not_accessed = self.aes_client_encoding(b"DETECTED_ANOMALY")
+                                                client.send(client_not_accessed)
+
+                                                client_socket.close()        
+                                        
+                                                print("Detected Anomaly in Client Model Result")
 
                                         #server jumps back to open connection
                                         self.run_server()
@@ -954,11 +959,37 @@ class Server:
         print()
         print("Client Test loss: ", client_test_loss, "Client Test Accuracy: ", client_test_accuracy)
 
-        if int(client_test_accuracy) - int(server_test_accuracy) > 0.2 or int(server_test_accuracy) - int(client_test_accuracy) > 0.2:
+        absolute_model_deviation = abs(client_test_accuracy) - (server_test_accuracy)
+
+        print(absolute_model_deviation)
+
+        #wird mit der zeit angepasst
+        percent_model_deviation = (absolute_model_deviation  / server_test_accuracy)
+
+        print("Deviation of Server and Client Model in Percent: ", percent_model_deviation)
+
+        self.model_deviation_approximation(percent_model_deviation, server_test_accuracy)
+
+        if percent_model_deviation > 1:
 
             return False
 
         return True
+
+
+    #The average test results of the clients are collected and if there is a large deviation, the client is rejected
+    def model_deviation_approximation(self, client_deviation, server_test_accuracy):
+
+        self.client_deviation_list.append(client_deviation)
+
+        percent_deviations = [
+            (abs(server_test_accuracy - accuracy) / server_test_accuracy) * 100
+            for accuracy in self.client_deviation_list
+        ]
+
+        average_percent_deviation = sum(percent_deviations) / len(self.client_deviation_list)
+
+        print("Average percent deviation: ", average_percent_deviation)
 
 
     #close server and client connection

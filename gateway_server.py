@@ -521,6 +521,8 @@ class Server:
                         formatted_client_address = formatted_client_address.decode("utf-8")
 
                         print(f"Server on {formatted_client_address} gets his smart contract...")
+
+# Server soll Kaution noch übermitteln!!!!                        
                         
                         # Server zur Client-Liste hinzufügen
                         self.connected_server_nodes.append(formatted_client_address)
@@ -544,16 +546,14 @@ class Server:
                         print("Aggregate Server Contract Deployed: ", aggregate_server_contract.address)
                         print()
 
-
                         #collect all registered servers in the BC
                         self.server_account_addresses.append(server_smart_contract_data['AccountAddress'])
                         self.connected_server.add(client_socket)
 
                         ### Verify Aggregate-Server ###
 
-                        # Build up smart contract for server and add account to BC #
-                        accept_msg = b"Server Accepted from Gateway-Server"
-                        accept_msg = self.aes_encoding(accept_msg)
+                        # Build up smart contract for server and add account to BC
+                        accept_msg = self.aes_encoding(b"SERVER_ACCEPTED_FROM_GATEWAY")
                         client_socket.send(accept_msg)
 
                         server_ready_flag = client_socket.recv(1024)
@@ -779,15 +779,9 @@ class Server:
 
                 if received_gateway_smart_contract == b"RECEIVED_BASE_SMART_CONTRACT":
 
-                    serialized_server_smart_contract = pickle.dumps(self.aggregate_server_smart_contract)
-                    enc_serialized_server_smart_contract = self.aes_encoding(serialized_server_smart_contract)
-                    client_socket.send(enc_serialized_server_smart_contract)
-
-                    print("Server got aggregate Server smart Contract!")
-
-                #jumping to client
-                self.server_busy = False
-                self.get_participant_request()
+                    #jumping to client
+                    self.server_busy = False
+                    self.get_participant_request()
 
 
     def transform_smart_contract(self, smart_contract):
@@ -1060,6 +1054,8 @@ class Server:
     #reconnect with clients to send the updated model weights
     def send_updated_model_weights_to_client(self, server_socket):
 
+#muss wieder aes verschlüsselt sein!
+
         server_socket.send(self.server_global_model_weights)
         server_socket.close()
 
@@ -1072,6 +1068,7 @@ class Server:
 
         #if last client than set server models to none
         if self.last_client:
+            
             self.server_global_model_weights = None
             self.last_client = False
 
